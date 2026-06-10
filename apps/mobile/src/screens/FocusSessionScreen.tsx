@@ -3,8 +3,17 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSessionStore } from '../store/sessionStore';
 import { useStateStore } from '../store/stateStore';
 import type { FocusSession } from '../types';
+import { card, colors, radius, space, type } from '../theme';
 
-const DURATION_OPTIONS = [25, 30, 45, 60, 90, 120];
+const DURATION_OPTIONS: { label: string; seconds: number }[] = [
+  { label: '10s', seconds: 10 },
+  { label: '25m', seconds: 25 * 60 },
+  { label: '30m', seconds: 30 * 60 },
+  { label: '45m', seconds: 45 * 60 },
+  { label: '60m', seconds: 60 * 60 },
+  { label: '90m', seconds: 90 * 60 },
+  { label: '120m', seconds: 120 * 60 },
+];
 
 function formatMMSS(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
@@ -15,6 +24,19 @@ function formatMMSS(totalSeconds: number): string {
   return `${m}:${s}`;
 }
 
+function formatDuration(totalSeconds: number): string {
+  return totalSeconds < 60 ? `${totalSeconds}s` : `${Math.round(totalSeconds / 60)}m`;
+}
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
 export default function FocusSessionScreen() {
   const activeSession = useSessionStore((s) => s.activeSession);
   const startSession = useSessionStore((s) => s.startSession);
@@ -22,7 +44,7 @@ export default function FocusSessionScreen() {
   const failSession = useSessionStore((s) => s.failSession);
 
   const student = useStateStore((s) => s.student);
-  const [selectedMinutes, setSelectedMinutes] = useState(25);
+  const [selectedSeconds, setSelectedSeconds] = useState(10);
   const [toast, setToast] = useState<string | null>(null);
 
   const recentSessions = useMemo<FocusSession[]>(() => {
@@ -38,11 +60,14 @@ export default function FocusSessionScreen() {
   async function onComplete() {
     await completeSession();
     const s = useStateStore.getState().student;
-    showToast(`+50 coins! Streak: ${s?.streak ?? 0} days`);
+    showToast(`+50 coins · streak ${s?.streak ?? 0}`);
   }
 
   function onGiveUp() {
-    if (typeof window !== 'undefined' && !window.confirm('Give up this session? No reward will be granted.')) {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm('Give up this session? No reward will be granted.')
+    ) {
       return;
     }
     void failSession('give_up');
@@ -58,11 +83,11 @@ export default function FocusSessionScreen() {
     : 0;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.statsBar}>
-        <Text style={styles.statText}>🔥 Streak: {student?.streak ?? 0} days</Text>
-        <Text style={styles.statText}>💰 Coins: {student?.coins ?? 0}</Text>
-        <Text style={styles.statText}>⏱ Today: {student?.todayFocusMinutes ?? 0} min</Text>
+    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <View style={styles.statsRow}>
+        <Stat label="Streak" value={`${student?.streak ?? 0}d`} />
+        <Stat label="Coins" value={student?.coins ?? 0} />
+        <Stat label="Today" value={`${student?.todayFocusMinutes ?? 0}m`} />
       </View>
 
       {toast && (
@@ -72,78 +97,97 @@ export default function FocusSessionScreen() {
       )}
 
       {!activeSession ? (
-        <View>
-          <Text style={styles.sectionTitle}>Choose a duration</Text>
-          <View style={styles.durationRow}>
-            {DURATION_OPTIONS.map((min) => (
-              <Pressable
-                key={min}
-                style={[styles.durationChip, selectedMinutes === min && styles.durationChipActive]}
-                onPress={() => setSelectedMinutes(min)}
-              >
-                <Text
-                  style={[
-                    styles.durationChipText,
-                    selectedMinutes === min && styles.durationChipTextActive,
-                  ]}
-                >
-                  {min}m
-                </Text>
-              </Pressable>
-            ))}
+        <View style={{ gap: space.lg }}>
+          <View style={[card, styles.panel]}>
+            <Text style={styles.eyebrow}>New session</Text>
+            <Text style={styles.panelTitle}>How long will you focus?</Text>
+            <View style={styles.durationRow}>
+              {DURATION_OPTIONS.map((opt) => {
+                const active = selectedSeconds === opt.seconds;
+                return (
+                  <Pressable
+                    key={opt.label}
+                    style={[styles.chip, active && styles.chipActive]}
+                    onPress={() => setSelectedSeconds(opt.seconds)}
+                  >
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Pressable style={styles.primaryBtn} onPress={() => startSession(selectedSeconds)}>
+              <Text style={styles.primaryBtnText}>Start session</Text>
+            </Pressable>
           </View>
 
-          <Pressable
-            style={styles.startButton}
-            onPress={() => startSession(selectedMinutes * 60)}
-          >
-            <Text style={styles.startButtonText}>Start Session</Text>
-          </Pressable>
-
-          <Text style={styles.sectionTitle}>Recent sessions</Text>
-          {recentSessions.length === 0 && (
-            <Text style={styles.muted}>No sessions yet. Start your first focus session!</Text>
-          )}
-          {recentSessions.map((s) => (
-            <View key={s.id} style={styles.sessionRow}>
-              <Text style={styles.sessionDate}>
-                {new Date(s.startedAt).toLocaleString()} · {Math.round(s.targetDuration / 60)}m
-              </Text>
-              <View
-                style={[
-                  styles.badge,
-                  s.status === 'completed' ? styles.badgeOk : styles.badgeFail,
-                ]}
-              >
-                <Text style={styles.badgeText}>
-                  {s.status === 'completed' ? 'completed' : `failed (${s.failReason ?? 'failed'})`}
-                </Text>
+          <View>
+            <Text style={styles.sectionTitle}>Recent sessions</Text>
+            {recentSessions.length === 0 ? (
+              <View style={[card, styles.emptyCard]}>
+                <Text style={styles.emptyText}>No sessions yet.</Text>
+                <Text style={styles.emptySub}>Pick a duration above and start your first one.</Text>
               </View>
-            </View>
-          ))}
+            ) : (
+              <View style={[card, styles.listCard]}>
+                {recentSessions.map((s, i) => (
+                  <View
+                    key={s.id}
+                    style={[styles.sessionRow, i > 0 && styles.rowDivider]}
+                  >
+                    <View style={{ flexShrink: 1 }}>
+                      <Text style={styles.sessionPrimary}>
+                        {formatDuration(s.targetDuration)} session
+                      </Text>
+                      <Text style={styles.sessionMeta}>
+                        {new Date(s.startedAt).toLocaleString()}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusTag,
+                        s.status === 'completed' ? styles.tagOk : styles.tagFail,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusTagText,
+                          s.status === 'completed' ? styles.tagOkText : styles.tagFailText,
+                        ]}
+                      >
+                        {s.status === 'completed' ? 'Completed' : `Failed · ${s.failReason ?? ''}`}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
       ) : (
-        <View style={styles.runningWrap}>
-          <Text style={styles.countdown}>{formatMMSS(remaining)}</Text>
+        <View style={[card, styles.timerCard]}>
+          <Text style={styles.eyebrow}>{canComplete ? 'Target reached' : 'Focusing'}</Text>
+          <Text style={styles.timer}>{formatMMSS(remaining)}</Text>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
           </View>
-          {canComplete ? (
-            <Text style={styles.readyText}>You can now complete!</Text>
-          ) : (
-            <Text style={styles.muted}>Stay focused — keep this screen in the foreground.</Text>
-          )}
+          <Text style={canComplete ? styles.readyText : styles.hintText}>
+            {canComplete
+              ? 'You can complete now.'
+              : 'Stay on this tab — leaving for 5s ends the session.'}
+          </Text>
 
           <Pressable
-            style={[styles.completeButton, !canComplete && styles.disabledButton]}
+            style={[styles.primaryBtn, !canComplete && styles.primaryBtnDisabled]}
             disabled={!canComplete}
             onPress={onComplete}
           >
-            <Text style={styles.completeButtonText}>Complete</Text>
+            <Text style={styles.primaryBtnText}>Complete</Text>
           </Pressable>
 
-          <Pressable style={styles.giveUpButton} onPress={onGiveUp}>
-            <Text style={styles.giveUpButtonText}>Give Up</Text>
+          <Pressable style={styles.ghostDangerBtn} onPress={onGiveUp}>
+            <Text style={styles.ghostDangerText}>Give up</Text>
           </Pressable>
         </View>
       )}
@@ -152,82 +196,102 @@ export default function FocusSessionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, gap: 8 },
-  statsBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#eef2ff',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 12,
+  container: { padding: space.lg, gap: space.lg },
+
+  statsRow: { flexDirection: 'row', gap: space.md },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: space.md,
+    paddingHorizontal: space.md,
   },
-  statText: { fontSize: 13, fontWeight: '600', color: '#3730a3' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 16, marginBottom: 8 },
-  durationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  durationChip: {
-    paddingVertical: 10,
+  statValue: { fontSize: 24, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] },
+  statLabel: { ...type.small, color: colors.muted, marginTop: 2 },
+
+  panel: { padding: space.lg, gap: space.md },
+  eyebrow: { ...type.label, color: colors.accent, textTransform: 'uppercase' },
+  panelTitle: { ...type.h2, color: colors.ink },
+  sectionTitle: { ...type.h2, color: colors.ink, marginBottom: space.sm },
+
+  durationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  chip: {
+    paddingVertical: 9,
     paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: '#e5e7eb',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  durationChipActive: { backgroundColor: '#4f46e5' },
-  durationChipText: { fontWeight: '600', color: '#374151' },
-  durationChipTextActive: { color: '#fff' },
-  startButton: {
-    marginTop: 16,
-    backgroundColor: '#4f46e5',
-    paddingVertical: 16,
-    borderRadius: 12,
+  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipText: { ...type.body, color: colors.inkSoft, fontWeight: '600' },
+  chipTextActive: { color: colors.surface },
+
+  primaryBtn: {
+    backgroundColor: colors.accent,
+    paddingVertical: 15,
+    borderRadius: radius.md,
     alignItems: 'center',
   },
-  startButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  muted: { color: '#6b7280', marginVertical: 4 },
+  primaryBtnDisabled: { backgroundColor: colors.borderStrong },
+  primaryBtnText: { color: colors.surface, fontSize: 16, fontWeight: '700' },
+
+  ghostDangerBtn: {
+    paddingVertical: 13,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
+  ghostDangerText: { color: colors.danger, fontSize: 15, fontWeight: '700' },
+
+  emptyCard: { padding: space.xl, alignItems: 'center', gap: 4 },
+  emptyText: { ...type.h2, color: colors.ink },
+  emptySub: { ...type.small, color: colors.muted },
+
+  listCard: { paddingHorizontal: space.lg },
   sessionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingVertical: space.md,
   },
-  sessionDate: { fontSize: 13, color: '#374151', flexShrink: 1 },
-  badge: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
-  badgeOk: { backgroundColor: '#dcfce7' },
-  badgeFail: { backgroundColor: '#fee2e2' },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  runningWrap: { alignItems: 'center', marginTop: 24, gap: 16 },
-  countdown: { fontSize: 72, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  rowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  sessionPrimary: { ...type.body, color: colors.ink, fontWeight: '600' },
+  sessionMeta: { ...type.small, color: colors.muted, marginTop: 2 },
+  statusTag: { paddingVertical: 5, paddingHorizontal: 11, borderRadius: radius.pill },
+  tagOk: { backgroundColor: colors.accentSoft },
+  tagFail: { backgroundColor: colors.dangerSoft },
+  statusTagText: { ...type.label },
+  tagOkText: { color: colors.accent },
+  tagFailText: { color: colors.danger },
+
+  timerCard: { padding: space.xl, alignItems: 'center', gap: space.lg },
+  timer: {
+    ...type.display,
+    color: colors.ink,
+    fontVariant: ['tabular-nums'],
+  },
   progressTrack: {
     width: '100%',
-    height: 14,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 7,
+    height: 10,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.pill,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  progressFill: { height: '100%', backgroundColor: '#4f46e5' },
-  readyText: { color: '#16a34a', fontWeight: '700', fontSize: 16 },
-  completeButton: {
-    width: '100%',
-    backgroundColor: '#16a34a',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  completeButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  disabledButton: { backgroundColor: '#9ca3af' },
-  giveUpButton: {
-    width: '100%',
-    backgroundColor: '#dc2626',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  giveUpButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  progressFill: { height: '100%', backgroundColor: colors.accent },
+  readyText: { ...type.body, color: colors.accent, fontWeight: '700' },
+  hintText: { ...type.small, color: colors.muted, textAlign: 'center' },
+
   toast: {
-    backgroundColor: '#111827',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
+    backgroundColor: colors.ink,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
   },
-  toastText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
+  toastText: { color: colors.surface, textAlign: 'center', fontWeight: '700', fontSize: 14 },
 });

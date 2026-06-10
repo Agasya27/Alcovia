@@ -8,13 +8,14 @@ import { useSyllabusStore } from './store/syllabusStore';
 import { initClock } from './sync/clock';
 import { getOnline, startSyncLoop } from './sync/syncEngine';
 import { DEVICE_ID } from './config';
+import { colors, radius, space, type } from './theme';
 
 type TabKey = 'focus' | 'syllabus' | 'dev';
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'focus', label: '🎯 Focus' },
-  { key: 'syllabus', label: '📚 Syllabus' },
-  { key: 'dev', label: '🛠 Dev Panel' },
+const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: 'focus', label: 'Focus', icon: '◴' },
+  { key: 'syllabus', label: 'Syllabus', icon: '◫' },
+  { key: 'dev', label: 'Dev Panel', icon: '⚙' },
 ];
 
 export default function App() {
@@ -24,8 +25,8 @@ export default function App() {
 
   useEffect(() => {
     async function boot() {
-      await loadSubjects(); // loads state from storage, seeding if needed
-      await initClock(); // restore Lamport clock from stored operations
+      await loadSubjects();
+      await initClock();
       startSyncLoop();
     }
     void boot();
@@ -38,11 +39,17 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Alcovia — Device: {DEVICE_ID}</Text>
+        <View>
+          <Text style={styles.wordmark}>Alcovia</Text>
+          <Text style={styles.deviceLine}>{DEVICE_ID}</Text>
+        </View>
         <View style={[styles.pill, online ? styles.pillOnline : styles.pillOffline]}>
-          <Text style={styles.pillText}>{online ? '● Online' : '● Offline'}</Text>
+          <View style={[styles.dot, online ? styles.dotOnline : styles.dotOffline]} />
+          <Text style={[styles.pillText, online ? styles.pillTextOnline : styles.pillTextOffline]}>
+            {online ? 'Online' : 'Offline'}
+          </Text>
         </View>
       </View>
 
@@ -53,46 +60,72 @@ export default function App() {
       </View>
 
       <View style={styles.tabBar}>
-        {TABS.map((t) => (
-          <Pressable
-            key={t.key}
-            style={[styles.tab, tab === t.key && styles.tabActive]}
-            onPress={() => setTab(t.key)}
-          >
-            <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
-          </Pressable>
-        ))}
+        {TABS.map((t) => {
+          const active = tab === t.key;
+          return (
+            <Pressable key={t.key} style={styles.tab} onPress={() => setTab(t.key)}>
+              <View style={[styles.tabInner, active && styles.tabInnerActive]}>
+                <Text style={[styles.tabIcon, active && styles.tabTextActive]}>{t.icon}</Text>
+                <Text style={[styles.tabText, active && styles.tabTextActive]}>{t.label}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#fff' },
+  root: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    backgroundColor: '#fafafa',
+    paddingHorizontal: space.xl,
+    paddingTop: space.lg,
+    paddingBottom: space.md,
+    backgroundColor: colors.bg,
   },
-  headerTitle: { fontSize: 15, fontWeight: '700', flexShrink: 1 },
-  pill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
-  pillOnline: { backgroundColor: '#dcfce7' },
-  pillOffline: { backgroundColor: '#fee2e2' },
-  pillText: { fontSize: 12, fontWeight: '700' },
+  wordmark: { ...type.h1, color: colors.ink },
+  deviceLine: { ...type.small, color: colors.muted, marginTop: 2 },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  pillOnline: { backgroundColor: colors.accentSoft, borderColor: colors.accentSoft },
+  pillOffline: { backgroundColor: colors.dangerSoft, borderColor: colors.dangerSoft },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  dotOnline: { backgroundColor: colors.online },
+  dotOffline: { backgroundColor: colors.offline },
+  pillText: { ...type.label },
+  pillTextOnline: { color: colors.online },
+  pillTextOffline: { color: colors.offline },
   content: { flex: 1 },
   tabBar: {
     flexDirection: 'row',
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    paddingBottom: space.lg,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    backgroundColor: '#fafafa',
+    borderTopColor: colors.border,
   },
-  tab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
-  tabActive: { borderTopWidth: 2, borderTopColor: '#4f46e5' },
-  tabText: { fontSize: 13, color: '#6b7280', fontWeight: '600' },
-  tabTextActive: { color: '#4f46e5' },
+  tab: { flex: 1, alignItems: 'center' },
+  tabInner: {
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+  },
+  tabInnerActive: { backgroundColor: colors.accentSoft },
+  tabIcon: { fontSize: 18, color: colors.muted },
+  tabText: { ...type.small, color: colors.muted },
+  tabTextActive: { color: colors.accent, fontWeight: '700' },
 });

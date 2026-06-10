@@ -3,7 +3,9 @@ import Database from 'better-sqlite3';
 import type { Operation, StudentState } from '../types';
 import { buildSeedState, STUDENT_ID } from './seed';
 
-const DB_PATH = path.join(process.cwd(), 'alcovia.sqlite');
+// On a host with a persistent disk (e.g. Railway volume) set SQLITE_PATH to a
+// path on that disk, e.g. /data/alcovia.sqlite. Defaults to the working dir.
+const DB_PATH = process.env.SQLITE_PATH ?? path.join(process.cwd(), 'alcovia.sqlite');
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 

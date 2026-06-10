@@ -102,6 +102,38 @@ Notification (POST to the server's `/webhook-test` mock sink) -> Respond OK.**
 
 A full checklist is in [DEMO_CHECKLIST.md](DEMO_CHECKLIST.md).
 
+## Deployment (optional)
+
+The app has three parts with different hosting needs. A working setup:
+
+### Backend → Railway (Express + SQLite)
+1. New project → Deploy from this GitHub repo.
+2. Set the service **Root Directory** to `apps/server` (Settings → Source).
+3. Add a **Volume** mounted at `/data` (Settings → Volumes) so SQLite persists.
+4. Set environment variables (Settings → Variables):
+   - `SQLITE_PATH=/data/alcovia.sqlite`
+   - `N8N_WEBHOOK_URL=<your n8n production webhook URL>`
+   - (`PORT` is provided by Railway automatically.)
+5. Railway uses `apps/server/railway.json`: it runs `npm run build` (compiles TypeScript) then `npm run start` (`node dist/index.js`). Note your public URL, e.g. `https://alcovia-api.up.railway.app`.
+
+### Frontend → Vercel (Expo web export)
+1. New project → import this repo.
+2. Set the project **Root Directory** to `apps/mobile`.
+3. Vercel uses `apps/mobile/vercel.json` (build `npx expo export --platform web`, output `dist`, SPA rewrite).
+4. Add environment variable:
+   - `EXPO_PUBLIC_API_URL=<your Railway backend URL>`
+5. Deploy. Open the resulting URL.
+
+### n8n → n8n Cloud
+With the backend public, n8n Cloud can both receive the webhook and call back to the backend's `/webhook-test` sink. Import `n8n-workflow.json`, change the `Send Notification` URL to `<backend URL>/webhook-test`, publish, and set `N8N_WEBHOOK_URL` on the backend to the cloud webhook URL.
+
+### Simulating two devices on a deployed URL
+Two tabs in the same browser share storage. On a single deployed URL, open it in **two different browsers** (or a normal + incognito window), or use the `?device=` query param to give each its own storage namespace:
+- `https://your-app.vercel.app/?device=device-1`
+- `https://your-app.vercel.app/?device=device-2`
+
+> Note on SQLite: persistence requires the Railway volume above. Without a volume the database resets on redeploy. For a production system you would migrate to Postgres; SQLite with a persistent disk is sufficient here.
+
 ## Conflict cases handled
 
 - **Same task changed on both devices** — highest Lamport clock wins (causal LWW);

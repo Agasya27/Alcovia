@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSubjects, useSyllabusStore } from '../store/syllabusStore';
 import { computeAllProgress } from '../utils/progress';
 import type { TaskStatus } from '../types';
+import { card, colors, radius, space, type } from '../theme';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   not_started: 'Not started',
@@ -47,67 +48,77 @@ export default function SyllabusScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <Text style={styles.heading}>Syllabus</Text>
       {subjects.map((subject) => {
         const sp = progressBySubject[subject.id];
+        const open = expanded[subject.id];
         const chapterProgress = Object.fromEntries(
           (sp?.chapters ?? []).map((c) => [c.chapterId, c]),
         );
         return (
-          <View key={subject.id} style={styles.card}>
-            <Pressable style={styles.rowHeader} onPress={() => toggle(subject.id)}>
-              <Text style={styles.subjectTitle}>
-                {expanded[subject.id] ? '▼' : '▶'} {subject.title}
-              </Text>
-              <View style={styles.rowRight}>
-                <ProgressBar percent={sp?.percent ?? 0} />
-                <Text style={styles.percentText}>{sp?.percent ?? 0}%</Text>
+          <View key={subject.id} style={[card, styles.subjectCard]}>
+            <Pressable style={styles.subjectHeader} onPress={() => toggle(subject.id)}>
+              <View style={styles.titleRow}>
+                <Text style={styles.chevron}>{open ? '–' : '+'}</Text>
+                <Text style={styles.subjectTitle}>{subject.title}</Text>
               </View>
+              <Text style={styles.percent}>{sp?.percent ?? 0}%</Text>
             </Pressable>
+            <ProgressBar percent={sp?.percent ?? 0} />
 
-            {expanded[subject.id] &&
+            {open &&
               subject.chapters.map((chapter) => {
                 const cp = chapterProgress[chapter.id];
+                const cOpen = expanded[chapter.id];
                 const visibleTasks = chapter.tasks.filter((t) => t.deletedAt === undefined);
                 return (
                   <View key={chapter.id} style={styles.chapterBlock}>
-                    <Pressable style={styles.rowHeader} onPress={() => toggle(chapter.id)}>
-                      <Text style={styles.chapterTitle}>
-                        {expanded[chapter.id] ? '▼' : '▶'} {chapter.title}
-                      </Text>
-                      <View style={styles.rowRight}>
-                        <ProgressBar percent={cp?.percent ?? 0} />
-                        <Text style={styles.percentText}>{cp?.percent ?? 0}%</Text>
+                    <Pressable style={styles.chapterHeader} onPress={() => toggle(chapter.id)}>
+                      <View style={styles.titleRow}>
+                        <Text style={styles.chevronSmall}>{cOpen ? '–' : '+'}</Text>
+                        <Text style={styles.chapterTitle}>{chapter.title}</Text>
                       </View>
+                      <Text style={styles.percentSmall}>{cp?.percent ?? 0}%</Text>
                     </Pressable>
+                    <ProgressBar percent={cp?.percent ?? 0} />
 
-                    {expanded[chapter.id] &&
-                      visibleTasks.map((task) => (
-                        <View key={task.id} style={styles.taskRow}>
-                          <Text style={styles.taskTitle}>{task.title}</Text>
-                          <View style={styles.taskControls}>
-                            <Pressable
-                              style={[styles.statusPicker, statusStyle(task.status)]}
-                              onPress={() =>
-                                updateTaskStatus(
-                                  subject.id,
-                                  chapter.id,
-                                  task.id,
-                                  NEXT_STATUS[task.status],
-                                )
-                              }
-                            >
-                              <Text style={styles.statusText}>{STATUS_LABEL[task.status]}</Text>
-                            </Pressable>
-                            <Pressable
-                              style={styles.deleteButton}
-                              onPress={() => onDelete(subject.id, chapter.id, task.id)}
-                            >
-                              <Text style={styles.deleteText}>🗑</Text>
-                            </Pressable>
+                    {cOpen && (
+                      <View style={styles.taskList}>
+                        {visibleTasks.map((task) => (
+                          <View key={task.id} style={styles.taskRow}>
+                            <Text style={styles.taskTitle} numberOfLines={1}>
+                              {task.title}
+                            </Text>
+                            <View style={styles.taskControls}>
+                              <Pressable
+                                style={[styles.statusPill, statusStyle(task.status)]}
+                                onPress={() =>
+                                  updateTaskStatus(
+                                    subject.id,
+                                    chapter.id,
+                                    task.id,
+                                    NEXT_STATUS[task.status],
+                                  )
+                                }
+                              >
+                                <View style={[styles.statusDot, statusDot(task.status)]} />
+                                <Text style={[styles.statusText, statusText(task.status)]}>
+                                  {STATUS_LABEL[task.status]}
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                style={styles.deleteBtn}
+                                accessibilityLabel="Delete task"
+                                onPress={() => onDelete(subject.id, chapter.id, task.id)}
+                              >
+                                <Text style={styles.deleteText}>×</Text>
+                              </Pressable>
+                            </View>
                           </View>
-                        </View>
-                      ))}
+                        ))}
+                      </View>
+                    )}
                   </View>
                 );
               })}
@@ -119,57 +130,96 @@ export default function SyllabusScreen() {
 }
 
 function statusStyle(status: TaskStatus) {
-  switch (status) {
-    case 'done':
-      return { backgroundColor: '#dcfce7' };
-    case 'in_progress':
-      return { backgroundColor: '#fef9c3' };
-    default:
-      return { backgroundColor: '#e5e7eb' };
-  }
+  if (status === 'done') return { backgroundColor: colors.accentSoft, borderColor: colors.accentSoft };
+  if (status === 'in_progress') return { backgroundColor: colors.warnSoft, borderColor: colors.warnSoft };
+  return { backgroundColor: colors.surfaceMuted, borderColor: colors.border };
+}
+function statusDot(status: TaskStatus) {
+  if (status === 'done') return { backgroundColor: colors.accent };
+  if (status === 'in_progress') return { backgroundColor: colors.warn };
+  return { backgroundColor: colors.muted };
+}
+function statusText(status: TaskStatus) {
+  if (status === 'done') return { color: colors.accent };
+  if (status === 'in_progress') return { color: colors.warn };
+  return { color: colors.inkSoft };
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, gap: 12 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  rowHeader: {
+  container: { padding: space.lg, gap: space.md },
+  heading: { ...type.h1, color: colors.ink, marginBottom: space.xs },
+
+  subjectCard: { padding: space.lg, gap: space.md },
+  subjectHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
   },
-  rowRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  subjectTitle: { fontSize: 16, fontWeight: '700', flexShrink: 1 },
-  chapterTitle: { fontSize: 14, fontWeight: '600', flexShrink: 1, color: '#374151' },
-  percentText: { fontSize: 12, fontWeight: '700', width: 38, textAlign: 'right' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexShrink: 1 },
+  chevron: { fontSize: 20, color: colors.muted, width: 16, textAlign: 'center' },
+  chevronSmall: { fontSize: 16, color: colors.muted, width: 14, textAlign: 'center' },
+  subjectTitle: { ...type.h2, color: colors.ink, flexShrink: 1 },
+  percent: { ...type.body, color: colors.ink, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  percentSmall: {
+    ...type.small,
+    color: colors.inkSoft,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+
   barTrack: {
-    width: 100,
-    height: 8,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 4,
+    height: 6,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.pill,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  barFill: { height: '100%', backgroundColor: '#4f46e5' },
-  chapterBlock: { paddingLeft: 12, marginTop: 4 },
+  barFill: { height: '100%', backgroundColor: colors.accent },
+
+  chapterBlock: {
+    gap: space.sm,
+    paddingTop: space.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  chapterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  chapterTitle: { ...type.body, color: colors.inkSoft, fontWeight: '600', flexShrink: 1 },
+
+  taskList: { gap: space.xs, marginTop: space.xs },
   taskRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingLeft: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    paddingVertical: space.sm,
+    paddingLeft: space.lg,
   },
-  taskTitle: { fontSize: 13, color: '#111827', flexShrink: 1, marginRight: 8 },
-  taskControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  statusPicker: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14 },
-  statusText: { fontSize: 12, fontWeight: '600' },
-  deleteButton: { padding: 6 },
-  deleteText: { fontSize: 16 },
+  taskTitle: { ...type.body, color: colors.ink, flexShrink: 1, marginRight: space.sm },
+  taskControls: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusText: { ...type.label },
+  deleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  deleteText: { fontSize: 18, color: colors.muted, lineHeight: 20 },
 });
