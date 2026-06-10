@@ -1,108 +1,79 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Operation, StudentState } from '../types';
 import { DEVICE_ID, STUDENT_ID } from '../config';
 import { buildSeedState } from './seed';
 
-interface AlcoviaDB extends DBSchema {
-  state: {
-    key: string;
-    value: StudentState;
-  };
-  operations: {
-    key: string;
-    value: Operation;
-    indexes: { synced: string; lamportClock: number };
-  };
-}
+// Storage is namespaced per device so two clients (two browser tabs, or a phone
+// and a laptop) behave like two independent devices that converge via the server.
+const NS = `alcovia-${DEVICE_ID}`;
+const stateKey = (studentId: string) => `${NS}:state:${studentId}`;
+const OPS_KEY = `${NS}:operations`;
 
-// DB name is namespaced per device so two browser tabs do not share storage.
-const DB_NAME = `alcovia-${DEVICE_ID}`;
-const DB_VERSION = 1;
-
-let dbPromise: Promise<IDBPDatabase<AlcoviaDB>> | null = null;
-
-function getDb(): Promise<IDBPDatabase<AlcoviaDB>> {
-  if (!dbPromise) {
-    dbPromise = openDB<AlcoviaDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains('state')) {
-          db.createObjectStore('state', { keyPath: 'studentId' });
-        }
-        if (!db.objectStoreNames.contains('operations')) {
-          const opStore = db.createObjectStore('operations', { keyPath: 'id' });
-          // idb cannot index booleans reliably across browsers, so we store the
-          // synced flag as a string ('true' | 'false') in a dedicated index field.
-          opStore.createIndex('synced', 'syncedFlag' as never);
-          opStore.createIndex('lamportClock', 'lamportClock');
-        }
-      },
-    });
+async function readOps(): Promise<Operation[]> {
+  const raw = await AsyncStorage.getItem(OPS_KEY);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as Operation[];
+  } catch {
+    return [];
   }
-  return dbPromise;
 }
 
-// Operations are persisted with an extra string flag so the `synced` index works.
-type StoredOperation = Operation & { syncedFlag: 'true' | 'false' };
-
-function toStored(op: Operation): StoredOperation {
-  return { ...op, syncedFlag: op.synced ? 'true' : 'false' };
-}
-
-function fromStored(op: StoredOperation): Operation {
-  const { syncedFlag, ...rest } = op;
-  return rest;
+async function writeOps(ops: Operation[]): Promise<void> {
+  await AsyncStorage.setItem(OPS_KEY, JSON.stringify(ops));
 }
 
 export async function seedInitialState(): Promise<StudentState> {
   const seed = buildSeedState();
-  const db = await getDb();
-  await db.put('state', seed);
+  await AsyncStorage.setItem(stateKey(seed.studentId), JSON.stringify(seed));
   return seed;
 }
 
 export async function getState(studentId: string = STUDENT_ID): Promise<StudentState> {
-  const db = await getDb();
-  const existing = await db.get('state', studentId);
-  if (existing) return existing;
+  const raw = await AsyncStorage.getItem(stateKey(studentId));
+  if (raw) {
+    try {
+      return JSON.parse(raw) as StudentState;
+    } catch {
+      // fall through to reseed on corrupt data
+    }
+  }
   return seedInitialState();
 }
 
 export async function saveState(state: StudentState): Promise<void> {
-  const db = await getDb();
-  await db.put('state', state);
+  await AsyncStorage.setItem(stateKey(state.studentId), JSON.stringify(state));
 }
 
 export async function addOperation(op: Operation): Promise<void> {
-  const db = await getDb();
-  await db.put('operations', toStored(op) as unknown as Operation);
+  const ops = await readOps();
+  const idx = ops.findIndex((o) => o.id === op.id);
+  if (idx >= 0) {
+    ops[idx] = op;
+  } else {
+    ops.push(op);
+  }
+  await writeOps(ops);
 }
 
 export async function getPendingOperations(): Promise<Operation[]> {
-  const db = await getDb();
-  const all = (await db.getAll('operations')) as unknown as StoredOperation[];
-  return all
-    .filter((op) => op.syncedFlag === 'false')
-    .map(fromStored)
+  const ops = await readOps();
+  return ops
+    .filter((op) => !op.synced)
     .sort((a, b) => a.lamportClock - b.lamportClock);
 }
 
 export async function getAllOperations(): Promise<Operation[]> {
-  const db = await getDb();
-  const all = (await db.getAll('operations')) as unknown as StoredOperation[];
-  return all.map(fromStored).sort((a, b) => a.lamportClock - b.lamportClock);
+  const ops = await readOps();
+  return [...ops].sort((a, b) => a.lamportClock - b.lamportClock);
 }
 
 export async function markOperationsSynced(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  const db = await getDb();
-  const tx = db.transaction('operations', 'readwrite');
-  for (const id of ids) {
-    const existing = (await tx.store.get(id)) as unknown as StoredOperation | undefined;
-    if (existing) {
-      existing.synced = true;
-      existing.syncedFlag = 'true';
-      await tx.store.put(existing as unknown as Operation);
-    }
+  const idSet = new Set(ids);
+  const ops = await readOps();
+  for (const op of ops) {
+    if (idSet.has(op.id)) op.synced = true;
   }
-  await tx.done;
+  await writeOps(ops);
 }

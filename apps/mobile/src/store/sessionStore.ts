@@ -5,6 +5,7 @@ import { createSessionCompletedOp, createSessionFailedOp } from '../sync/operati
 import { getLamportClock } from '../sync/clock';
 import { useStateStore } from './stateStore';
 import { COINS_PER_SESSION, STUDENT_ID } from '../config';
+import { randomUUID } from '../utils/id';
 
 interface ActiveSession {
   id: string;
@@ -50,7 +51,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   startSession(targetDuration) {
     clearTimers();
     const active: ActiveSession = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       targetDuration,
       elapsedSeconds: 0,
       startedAt: Date.now(),

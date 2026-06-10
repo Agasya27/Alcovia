@@ -1,0 +1,70 @@
+{
+  "name": "Alcovia Focus Session Notification (Cloud)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "focus-session",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b1a1c111-1111-4111-8111-111111111111",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "focus-session"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplicate by sessionId using the workflow's persistent static data.\n// If a notification was already sent for this session, stop the execution so\n// the same successful session never fires twice (replays / both devices).\nconst staticData = $getWorkflowStaticData('global');\nconst sessionId = $input.first().json.body\n  ? $input.first().json.body.sessionId\n  : $input.first().json.sessionId;\n\nif (!sessionId) {\n  return [];\n}\n\nif (staticData[sessionId]) {\n  return [];\n}\n\nstaticData[sessionId] = Date.now();\n\n// Normalise the payload so downstream nodes can read it directly.\nconst src = $input.first().json.body ?? $input.first().json;\nreturn [\n  {\n    json: {\n      sessionId: src.sessionId,\n      studentId: src.studentId,\n      streak: src.streak,\n      coinsEarned: src.coinsEarned,\n    },\n  },\n];"
+      },
+      "id": "b2a2c222-2222-4222-8222-222222222222",
+      "name": "Check Dedup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://alcovia-server-production.up.railway.app/webhook-test",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"to\": \"student-001\", \"message\": \"🔥 Streak now \" + $json.streak + \" days! +\" + $json.coinsEarned + \" coins earned.\", \"sessionId\": $json.sessionId } }}",
+        "options": {}
+      },
+      "id": "b3a3c333-3333-4333-8333-333333333333",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true } }}",
+        "options": {}
+      },
+      "id": "b4a4c444-4444-4444-8444-444444444444",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Check Dedup", "type": "main", "index": 0 }]]
+    },
+    "Check Dedup": {
+      "main": [[{ "node": "Send Notification", "type": "main", "index": 0 }]]
+    },
+    "Send Notification": {
+      "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

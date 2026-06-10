@@ -2,6 +2,7 @@ import type { FocusSession, Operation, OperationType, TaskStatus } from '../type
 import { addOperation } from '../db/clientDb';
 import { tickClock } from './clock';
 import { DEVICE_ID, STUDENT_ID } from '../config';
+import { randomUUID } from '../utils/id';
 
 async function buildOperation(
   type: OperationType,
@@ -9,7 +10,7 @@ async function buildOperation(
 ): Promise<Operation> {
   const lamportClock = tickClock();
   const op: Operation = {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     studentId: STUDENT_ID,
     deviceId: DEVICE_ID,
     type,
