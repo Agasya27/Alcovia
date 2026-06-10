@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.expo/
+web-build/
+*.log
+
+# Local databases
+*.sqlite
+*.sqlite-journal
+apps/server/alcovia.sqlite*
+
+# Env files
+.env
+.env.local
+
+# OS
+.DS_Store
+
+# Internal working notes (not part of the deliverable)
+CURSOR_PROMPT.md

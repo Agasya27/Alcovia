@@ -1,0 +1,13 @@
+{
+  "name": "alcovia",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline-first study app with two-device sync (Focus Sessions + Syllabus Progress) and n8n automation.",
+  "scripts": {
+    "install:all": "cd apps/server && npm install && cd ../mobile && npm install",
+    "dev:server": "cd apps/server && npx tsx watch src/index.ts",
+    "dev:client1": "cd apps/mobile && EXPO_PUBLIC_CLIENT_ID=device-1 npx expo start --web --port 8081",
+    "dev:client2": "cd apps/mobile && EXPO_PUBLIC_CLIENT_ID=device-2 npx expo start --web --port 8082",
+    "typecheck": "cd apps/server && npx tsc --noEmit && cd ../mobile && npx tsc --noEmit"
+  }
+}
